@@ -40,10 +40,10 @@ X-API-Key: your-secret
    - `NOUHINSHO_MAX_ORDERS`: 默认 `300`。
 6. 点击 Deploy。
 
-部署完成后会得到类似：
+当前已部署的生产地址：
 
 ```text
-https://tk-order-sync-nouhinsho-api.vercel.app
+https://nouhinsho-vercel-api.vercel.app
 ```
 
 把这个地址填到 ERP “纳品书”页的“生成服务地址”中。如果设置了 `NOUHINSHO_API_KEY`，也把同一个密钥填到“API 密钥”中。
@@ -55,7 +55,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 pip install uvicorn
-uvicorn api.index:app --host 127.0.0.1 --port 8502
+uvicorn app:app --host 127.0.0.1 --port 8502
 ```
 
 然后在 ERP 中使用：
