@@ -2,6 +2,7 @@
 
 __all__ = [
     "generate_zip",
+    "generate_pdf_zip",
     "generate_documents",
     "GenerationError",
     "read_orders_from_excel",
@@ -12,7 +13,7 @@ __all__ = [
 
 
 def __getattr__(name: str):
-    if name in {"generate_zip", "generate_documents", "GenerationError"}:
+    if name in {"generate_zip", "generate_pdf_zip", "generate_documents", "GenerationError"}:
         from . import generator
 
         return getattr(generator, name)

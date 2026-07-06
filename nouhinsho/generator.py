@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from datetime import date
+import os
 from pathlib import Path
+import shutil
+import subprocess
 from tempfile import TemporaryDirectory
 from typing import Iterable
 import zipfile
@@ -29,15 +32,21 @@ def issue_date_text(value: str | None = None) -> str:
 def prefix_for(source: str) -> str:
     source = source.lower().strip()
     if source in {"temu"}:
-        return "Temu納品書"
+        return "Temu"
     if source in {"private", "私域"}:
-        return "私域納品書"
-    return "納品書"
+        return "私域"
+    if source in {"aliexpress"}:
+        return "Aliexpress"
+    return "TK"
 
 
 def filename_for(order: Order) -> str:
-    prefix = order.filename_prefix.strip() or prefix_for(order.source)
-    return f"{prefix}_{safe_filename(order.order_no)}_{safe_filename(order.recipient)}.docx"
+    platform = safe_filename(order.filename_prefix.strip() or prefix_for(order.source))
+    return f"納品書_{platform}_{safe_filename(order.order_no)}.docx"
+
+
+def pdf_filename_for(order: Order) -> str:
+    return Path(filename_for(order)).with_suffix(".pdf").name
 
 
 def validate_orders(orders: Iterable[Order]) -> list[str]:
@@ -88,4 +97,80 @@ def generate_zip(template_path: str | Path, orders: list[Order], zip_path: str |
             for result in results:
                 source = Path(result["output"])
                 archive.write(source, arcname=source.name)
+    return results
+
+
+def _soffice_path() -> str | None:
+    candidates = [
+        os.getenv("SOFFICE_BIN", "").strip(),
+        "soffice",
+        "libreoffice",
+        "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+        r"C:\Program Files\LibreOffice\program\soffice.exe",
+        r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        resolved = candidate if Path(candidate).exists() else shutil.which(candidate)
+        if resolved and Path(resolved).exists():
+            return resolved
+    return None
+
+
+def convert_docx_to_pdf(docx_path: str | Path, pdf_dir: str | Path) -> Path:
+    source = Path(docx_path)
+    output = Path(pdf_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    soffice = _soffice_path()
+    if not soffice:
+        raise GenerationError("PDF 转换工具 LibreOffice/soffice 未安装或不在 PATH 中。")
+    cmd = [
+        soffice,
+        "--headless",
+        "--convert-to",
+        "pdf",
+        "--outdir",
+        str(output),
+        str(source),
+    ]
+    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=90)
+    pdf_path = output / source.with_suffix(".pdf").name
+    if proc.returncode != 0 or not pdf_path.exists():
+        detail = (proc.stderr or proc.stdout or "unknown error").strip()
+        raise GenerationError(f"PDF 转换失败：{detail}")
+    return pdf_path
+
+
+def generate_pdf_zip(template_path: str | Path, orders: list[Order], zip_path: str | Path, *, issue_date: str | None = None) -> list[dict]:
+    zip_path = Path(zip_path)
+    with TemporaryDirectory(prefix="nouhinsho_pdf_") as temp:
+        temp_path = Path(temp)
+        pdf_dir = temp_path / "pdf"
+        results: list[dict]
+        if _soffice_path():
+            docx_dir = temp_path / "docx"
+            results = generate_documents(template_path, orders, docx_dir, issue_date=issue_date)
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
+                for index, result in enumerate(results):
+                    source = Path(result["output"])
+                    pdf_path = convert_docx_to_pdf(source, pdf_dir)
+                    archive.write(pdf_path, arcname=pdf_filename_for(orders[index]))
+                    result["pdf_output"] = str(pdf_path)
+            return results
+
+        from .pdf_writer import write_pdf
+
+        errors = validate_orders(orders)
+        if errors:
+            raise GenerationError("\n".join(errors))
+        pdf_dir.mkdir(parents=True, exist_ok=True)
+        results = []
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
+            for order in orders:
+                pdf_path = pdf_dir / pdf_filename_for(order)
+                result = write_pdf(pdf_path, order, issue_date=issue_date)
+                archive.write(pdf_path, arcname=pdf_path.name)
+                result["pdf_output"] = str(pdf_path)
+                results.append(result)
     return results

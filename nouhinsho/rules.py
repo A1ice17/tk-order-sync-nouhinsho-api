@@ -95,15 +95,12 @@ def normalize_product_display(product_name: object, care: object | None = None, 
             care_value = normalize_care(care_match.group(1))
         elif "なし" in raw:
             care_value = "なし"
-    base = canonical_base_name(raw, source=source)
 
-    # Keep non-camera accessories concise and do not invent a Care field.
-    key = detect_model_key(raw)
-    if key in {"pocket3_standard", "pocket3_creator", "pocket4_standard", "pocket4_creator", "mobile8p_standard"}:
-        if not care_value:
-            care_value = "なし"
-        return f"{base}/DJI Care Refresh：{care_value}"
-    return base
+    # The delivery note must reflect the exact product selected in ERP.
+    # Do not replace it with a guessed canonical model name.
+    if care_value and not re.search(r"DJI\s*Care\s*Refresh", raw, flags=re.I):
+        return f"{raw}/DJI Care Refresh：{care_value}"
+    return raw
 
 
 def resolve_sku(product_name: object, care: object | None, explicit_sku: object | None = None) -> str:
@@ -135,9 +132,11 @@ def format_phone(value: object) -> str:
     raw = clean_text(value)
     digits = _phone_digits(value)
     if digits.startswith("0081"):
-        digits = "0" + digits[4:]
+        rest = digits[4:]
+        digits = rest if rest.startswith("0") else "0" + rest
     if digits.startswith("81"):
-        digits = "0" + digits[2:]
+        rest = digits[2:]
+        digits = rest if rest.startswith("0") else "0" + rest
     # Excel sometimes stores 08012345678 as the number 8012345678.
     if len(digits) == 10 and not digits.startswith("0") and digits[0] in {"7", "8", "9"}:
         digits = "0" + digits

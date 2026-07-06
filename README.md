@@ -1,6 +1,6 @@
 # tk-order-sync-nouhinsho-api
 
-Vercel 用纳品书生成 API。它接收纳品书 DOCX 模板和订单 JSON，返回生成好的 DOCX ZIP。
+Vercel 用纳品书生成 API。它接收纳品书 DOCX 模板和订单 JSON，返回生成好的 DOCX ZIP 或 PDF ZIP。
 
 ## API
 
@@ -16,11 +16,19 @@ GET /api/nouhinsho/health
 POST /api/nouhinsho/generate
 ```
 
+生成 PDF ZIP：
+
+```text
+POST /api/nouhinsho/generate-pdf
+```
+
 表单字段：
 
 - `template`: DOCX 模板文件
 - `orders`: JSON 字符串，格式为 `{ "orders": [...] }`
 - `issue_date`: 発行日，例如 `2026-06-29`
+
+PDF ZIP 会优先使用 LibreOffice/soffice 从 DOCX 转换；Vercel 环境没有 soffice 时，会使用内置 ReportLab PDF 生成器直接生成 ZIP。
 
 如果设置了 API 密钥，请在请求头里带：
 
